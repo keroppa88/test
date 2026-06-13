@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>サバンナドライブ</title>
+<title>サバンナ・ハント</title>
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #87b5d4; font-family: sans-serif; }
   #info {
@@ -11,20 +11,101 @@
     text-shadow: 0 1px 2px #000; font-size: 14px; line-height: 1.5;
     pointer-events: none; z-index: 10;
   }
-  #speed {
-    position: fixed; bottom: 14px; right: 16px; color: #fff;
-    text-shadow: 0 1px 2px #000; font-size: 22px; font-weight: bold; z-index: 10;
+  #status {
+    position: fixed; top: 10px; right: 14px; text-align: right;
+    text-shadow: 0 1px 2px #000; font-size: 16px; font-weight: bold; z-index: 10;
   }
   #hint {
     position: fixed; bottom: 14px; left: 16px; color: #fff;
     text-shadow: 0 1px 2px #000; font-size: 13px; z-index: 10;
   }
+  /* HPバー */
+  #hpwrap {
+    position: fixed; bottom: 16px; right: 16px; width: 200px; height: 16px;
+    border: 2px solid #fff; background: rgba(0,0,0,.4); z-index: 10;
+  }
+  #hpbar { height: 100%; width: 100%; background: #43c44a; transition: width .1s; }
+  /* ライフルのクールダウン */
+  #rifle {
+    position: fixed; bottom: 40px; right: 16px; color: #fff;
+    text-shadow: 0 1px 2px #000; font-size: 14px; z-index: 10;
+  }
+  /* クロスヘア */
+  #cross {
+    position: fixed; left: 50%; top: 50%; width: 22px; height: 22px;
+    transform: translate(-50%,-50%); z-index: 10; pointer-events: none;
+  }
+  #cross::before, #cross::after {
+    content: ''; position: absolute; background: rgba(255,255,255,.85);
+    box-shadow: 0 0 2px #000;
+  }
+  #cross::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+  #cross::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+  /* スコープ表示（覗いている時のみ） */
+  #scope {
+    position: fixed; inset: 0; display: none; z-index: 11; pointer-events: none;
+    background:
+      radial-gradient(circle at center, transparent 0 38vh, rgba(0,0,0,.97) 38.4vh);
+  }
+  #scope::before, #scope::after {
+    content: ''; position: absolute; left: 50%; top: 50%; background: rgba(20,20,20,.9);
+  }
+  #scope::before { width: 76vh; height: 2px; transform: translate(-50%,-50%); }
+  #scope::after { height: 76vh; width: 2px; transform: translate(-50%,-50%); }
+  #scopedot {
+    position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; border-radius: 50%;
+    background: #e02020; transform: translate(-50%,-50%); z-index: 12;
+    display: none; pointer-events: none; box-shadow: 0 0 4px #000;
+  }
+  /* メニュー */
+  #menu {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.45); z-index: 15;
+  }
+  #menu .box {
+    background: rgba(20,24,20,.92); border: 2px solid #cdd6c0; padding: 24px 32px;
+    color: #fff; min-width: 280px; text-shadow: 0 1px 2px #000;
+  }
+  #menu h2 { margin: 0 0 14px; }
+  #menu .item {
+    padding: 10px 14px; font-size: 16px; cursor: pointer; border: 1px solid transparent;
+  }
+  #menu .item.selected { background: rgba(255,255,255,.18); border-color: #fff; }
+  #menu .mtip { font-size: 12px; opacity: .7; margin: 14px 0 0; }
+  /* 被弾フラッシュ */
+  #hurt {
+    position: fixed; inset: 0; background: radial-gradient(transparent 40%, rgba(180,0,0,.55));
+    opacity: 0; pointer-events: none; z-index: 9; transition: opacity .15s;
+  }
+  /* 終了オーバーレイ */
+  #over {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; color: #fff; background: rgba(0,0,0,.6); z-index: 20;
+    text-shadow: 0 2px 4px #000;
+  }
+  #over h1 { font-size: 48px; margin: 0 0 8px; }
+  #over p { font-size: 16px; }
 </style>
 </head>
 <body>
-<div id="info">サバンナ 3D ドライブ<br>草原・砂・木・林・水がランダム生成</div>
-<div id="speed">0 km/h</div>
-<div id="hint">W/↑:前進  S/↓:後退  A/←・D/→:ステア</div>
+<div id="info">サバンナ・ハント<br>このエリアに潜む敵を仕留めろ</div>
+<div id="status">敵: 捜索中</div>
+<div id="rifle">ライフル: 装填完了</div>
+<div id="hpwrap"><div id="hpbar"></div></div>
+<div id="cross"></div>
+<div id="scope"></div>
+<div id="scopedot"></div>
+<div id="menu">
+  <div class="box">
+    <h2>メニュー</h2>
+    <div class="item selected" data-action="rifle">ライフル（スコープを覗く）</div>
+    <div class="item" data-action="close">閉じる</div>
+    <p class="mtip">↑↓/W S で選択 ・ Enter で決定 ・ P で閉じる</p>
+  </div>
+</div>
+<div id="hurt"></div>
+<div id="over"><h1></h1><p>クリックでリスタート</p></div>
+<div id="hint">W/↑:前進 S/↓:後退 A/←・D/→:旋回 ｜ P:メニュー ｜ スコープ中:Enter発砲(20秒/発) I/K:ズーム</div>
 
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -184,160 +265,375 @@ function makeTrees() {
 }
 makeTrees();
 
-// ---------- 車 (主観視点なので車体は描画せず、座標・向きの基準のみ) ----------
-const car = new THREE.Group();
-scene.add(car);
-
-// ---------- 車の物理 ----------
-const carState = {
-  x: 0, z: 0, heading: 0, speed: 0,
+// ---------- プレイヤー (徒歩・主観視点。座標と向きのみ管理) ----------
+const player = {
+  x: 0, z: 0, heading: 0, speed: 0, hp: 100, alive: true,
 };
-// 初期位置を乾いた陸地に
-(function placeCar() {
-  for (let i = 0; i < 200; i++) {
-    const x = (Math.random() - 0.5) * 200;
-    const z = (Math.random() - 0.5) * 200;
-    if (heightAt(x, z) > WATER_LEVEL + 3) { carState.x = x; carState.z = z; break; }
+(function placePlayer() {
+  for (let i = 0; i < 300; i++) {
+    const x = (Math.random() - 0.5) * 240;
+    const z = (Math.random() - 0.5) * 240;
+    if (heightAt(x, z) > WATER_LEVEL + 3) { player.x = x; player.z = z; break; }
   }
 })();
 
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; engine.start(); });
+// モード: 'normal'（通常）/ 'scope'（スコープを覗く）
+let mode = 'normal';
+let menuOpen = false;
+let scopeFov = 18;                 // スコープ時の視野角（小さいほど拡大）
+const NORMAL_FOV = 70;
+const menuEl = document.getElementById('menu');
+const menuItems = [...menuEl.querySelectorAll('.item')];
+let menuIndex = 0;
+
+function refreshMenu() {
+  menuItems.forEach((el, i) => el.classList.toggle('selected', i === menuIndex));
+}
+function openMenu() { menuOpen = true; menuIndex = 0; refreshMenu(); menuEl.style.display = 'flex'; }
+function closeMenu() { menuOpen = false; menuEl.style.display = 'none'; }
+function chooseMenu() {
+  const action = menuItems[menuIndex].dataset.action;
+  closeMenu();
+  if (action === 'rifle') mode = 'scope';       // スコープモードへ
+}
+menuItems.forEach((el, i) => el.addEventListener('mousedown', ev => {
+  ev.stopPropagation(); menuIndex = i; refreshMenu(); chooseMenu();
+}));
+
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  sfx.unlock();
+  if (overlayActive) return;
+  if (e.code === 'KeyP') {                       // メニューの開閉
+    if (menuOpen) closeMenu(); else openMenu();
+    e.preventDefault(); return;
+  }
+  if (menuOpen) {                                // メニュー操作
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') { menuIndex = (menuIndex + menuItems.length - 1) % menuItems.length; refreshMenu(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { menuIndex = (menuIndex + 1) % menuItems.length; refreshMenu(); }
+    else if (e.code === 'Enter') chooseMenu();
+    e.preventDefault(); return;
+  }
+  if (mode === 'scope') {
+    if (e.code === 'Enter') { fire(); e.preventDefault(); }
+    if (e.code === 'Escape') mode = 'normal';
+  }
+});
 addEventListener('keyup', e => { keys[e.code] = false; });
 
-// ---------- エンジン音 (ノイズ合成・2層を重ねる) ----------
-const engine = (() => {
-  let ctx, master, started = false;
-  // 層1: 低い唸り(ローパス) 層2: 高い吹け上がり(バンドパス)
-  let lowGain, highGain, lowFilter, highFilter;
-
-  function makeNoiseSource(c) {
-    // 2秒分のホワイトノイズをループ再生
-    const buf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src = c.createBufferSource();
-    src.buffer = buf; src.loop = true;
-    return src;
-  }
-
-  function start() {
-    if (started) return;
-    started = true;
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain();
-    master.gain.value = 0.0001;
-    master.connect(ctx.destination);
-
-    // 層1: 低周波の唸り
-    const n1 = makeNoiseSource(ctx);
-    lowFilter = ctx.createBiquadFilter();
-    lowFilter.type = 'lowpass';
-    lowFilter.frequency.value = 120;
-    lowFilter.Q.value = 6;
-    lowGain = ctx.createGain();
-    lowGain.gain.value = 0.6;
-    n1.connect(lowFilter).connect(lowGain).connect(master);
-    n1.start();
-
-    // 層2: 高周波のザラついた吹け上がり
-    const n2 = makeNoiseSource(ctx);
-    highFilter = ctx.createBiquadFilter();
-    highFilter.type = 'bandpass';
-    highFilter.frequency.value = 800;
-    highFilter.Q.value = 1.2;
-    highGain = ctx.createGain();
-    highGain.gain.value = 0.0;
-    n2.connect(highFilter).connect(highGain).connect(master);
-    n2.start();
-  }
-
-  // t: アイドル0〜全開1 を想定した量
-  function update(speedAbs, maxSpeed) {
-    if (!started) return;
+// ---------- 効果音 (ノイズ合成・銃声) ----------
+const sfx = (() => {
+  let ctx;
+  function unlock() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
-    const t = THREE.MathUtils.clamp(speedAbs / maxSpeed, 0, 1);
-    const now = ctx.currentTime, smooth = 0.08;
-    // 全体音量: アイドルでも僅かに鳴り、速度で大きく
-    master.gain.setTargetAtTime(0.12 + t * 0.55, now, smooth);
-    // 層1の唸りは回転数(速度)でピッチが上がる
-    lowFilter.frequency.setTargetAtTime(90 + t * 380, now, smooth);
-    lowGain.gain.setTargetAtTime(0.5 + t * 0.3, now, smooth);
-    // 層2のザラつき(ノイズ感)は速度が上がるほど増える
-    highFilter.frequency.setTargetAtTime(500 + t * 2600, now, smooth);
-    highGain.gain.setTargetAtTime(t * t * 0.9, now, smooth);
   }
-
-  return { start, update };
+  // ライフルの発砲音: 鋭いノイズのバースト + 低い衝撃音
+  function gunshot() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    // ノイズバースト
+    const len = ctx.sampleRate * 0.4;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 600;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    src.connect(hp).connect(g).connect(ctx.destination); src.start(t);
+    // 低い衝撃音
+    const osc = ctx.createOscillator(); osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, t); osc.frequency.exponentialRampToValueAtTime(40, t + 0.25);
+    const og = ctx.createGain(); og.gain.setValueAtTime(0.8, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(og).connect(ctx.destination); osc.start(t); osc.stop(t + 0.3);
+  }
+  return { unlock, gunshot };
 })();
 
-function terrainNormal(x, z) {
-  const e = 1.0;
-  const hL = heightAt(x - e, z), hR = heightAt(x + e, z);
-  const hD = heightAt(x, z - e), hU = heightAt(x, z + e);
-  return new THREE.Vector3(hL - hR, 2 * e, hD - hU).normalize();
+// ---------- 敵 (ランダムで3種から1体) ----------
+const ENEMY_KINDS = ['oni', 'giant', 'ghost'];
+const enemyKind = ENEMY_KINDS[Math.floor(Math.random() * ENEMY_KINDS.length)];
+
+function buildEnemyMesh(kind) {
+  const g = new THREE.Group();
+  if (kind === 'oni') {
+    // 全身が赤い人間（鬼）
+    const mat = new THREE.MeshStandardMaterial({ color: 0xcc1f1f, roughness: 0.7 });
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.0, 4, 8), mat);
+    torso.position.y = 1.3;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), mat);
+    head.position.y = 2.2;
+    // 角
+    const hornMat = new THREE.MeshStandardMaterial({ color: 0xf0e0c0 });
+    for (const dx of [-0.16, 0.16]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.35, 6), hornMat);
+      horn.position.set(dx, 2.5, 0);
+      g.add(horn);
+    }
+    g.add(torso, head);
+    g.userData = { eye: 1.9, scale: 1, radius: 0.6, fly: false };
+  } else if (kind === 'giant') {
+    // 大きな巨人
+    const mat = new THREE.MeshStandardMaterial({ color: 0x6b5848, roughness: 0.9 });
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, 2.2, 4, 8), mat);
+    torso.position.y = 2.6;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 10), mat);
+    head.position.y = 4.4;
+    for (const dx of [-1.1, 1.1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 1.8, 4, 6), mat);
+      arm.position.set(dx, 2.7, 0);
+      g.add(arm);
+    }
+    g.add(torso, head);
+    g.userData = { eye: 4.0, scale: 1.6, radius: 1.4, fly: false };
+  } else {
+    // 白い幽霊：空中浮遊する白い塊
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, emissive: 0xaad0ff, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.7, roughness: 0.3,
+    });
+    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 14), mat);
+    blob.scale.set(1, 1.3, 1);
+    blob.position.y = 0;
+    // 下部をちぎれた塊風に
+    for (let i = 0; i < 5; i++) {
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(0.3 + Math.random() * 0.2, 8, 8), mat);
+      lump.position.set((Math.random() - 0.5), -1 - Math.random() * 0.6, (Math.random() - 0.5));
+      g.add(lump);
+    }
+    g.add(blob);
+    g.userData = { eye: 1.6, scale: 1.2, radius: 1.0, fly: true };
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.scale.setScalar(g.userData.scale);
+  return g;
 }
+
+const enemyMesh = buildEnemyMesh(enemyKind);
+scene.add(enemyMesh);
+
+const enemyLabel = { oni: '赤い鬼', giant: '巨人', ghost: '白い幽霊' }[enemyKind];
+
+const enemy = {
+  x: 0, z: 0, heading: 0, hp: 100, alive: true,
+  state: 'patrol',           // patrol / chase
+  alertTimer: 0,             // 追跡継続時間
+  target: { x: 0, z: 0 },    // 巡回先
+  speed: enemyKind === 'giant' ? 4.5 : enemyKind === 'ghost' ? 6.5 : 5.8,
+  sightRange: enemyKind === 'ghost' ? 50 : 70,
+  hearRange: 160,
+};
+// プレイヤーから離れた場所にスポーン
+(function placeEnemy() {
+  for (let i = 0; i < 300; i++) {
+    const x = (Math.random() - 0.5) * 360;
+    const z = (Math.random() - 0.5) * 360;
+    const d = Math.hypot(x - player.x, z - player.z);
+    if (d > 90 && heightAt(x, z) > WATER_LEVEL + 2) { enemy.x = x; enemy.z = z; break; }
+  }
+  enemy.target.x = enemy.x; enemy.target.z = enemy.z;
+})();
+
+// ---------- ライフル ----------
+const RIFLE_COOLDOWN = 20;   // 秒
+let lastShot = -RIFLE_COOLDOWN;
+const raycaster = new THREE.Raycaster();
+let gameTime = 0;
+
+function fire() {
+  if (mode !== 'scope' || menuOpen) return;          // スコープを覗いている時だけ撃てる
+  if (!player.alive || !enemy.alive) return;
+  if (gameTime - lastShot < RIFLE_COOLDOWN) return;  // 装填中
+  lastShot = gameTime;
+  sfx.unlock();
+  sfx.gunshot();
+  // 発砲音で敵が必ず気づく(エリア内に響く)
+  const dist = Math.hypot(enemy.x - player.x, enemy.z - player.z);
+  if (dist < enemy.hearRange) alertEnemy();
+
+  // 画面中央からレイを飛ばして命中判定
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const hits = raycaster.intersectObject(enemyMesh, true);
+  if (hits.length) {
+    enemy.hp -= 60;            // 2発で仕留められる威力
+    flashEnemyHit();
+    if (enemy.hp <= 0) { enemy.hp = 0; enemy.alive = false; endGame(true); }
+  }
+}
+addEventListener('mousedown', () => {
+  if (overlayActive) { restart(); return; }
+  if (menuOpen) return;
+  if (mode === 'scope') fire();                  // スコープ中はクリックでも発砲可
+});
+
+function flashEnemyHit() {
+  enemyMesh.traverse(o => { if (o.isMesh && o.material.emissive) {
+    const m = o.material; const prev = m.emissiveIntensity;
+    m.emissive.setHex(0xff3030); m.emissiveIntensity = 1.2;
+    setTimeout(() => { m.emissiveIntensity = prev; }, 120);
+  }});
+}
+
+function alertEnemy() {
+  enemy.state = 'chase';
+  enemy.alertTimer = 12;       // 12秒は追跡継続
+}
+
+// ---------- ゲーム終了 ----------
+let overlayActive = false;
+function endGame(win) {
+  overlayActive = true;
+  const over = document.getElementById('over');
+  over.querySelector('h1').textContent = win ? '討伐成功' : 'やられた…';
+  over.querySelector('h1').style.color = win ? '#7fe08a' : '#ff6b6b';
+  over.style.display = 'flex';
+}
+function restart() { location.reload(); }
+
+// ---------- HUD更新 ----------
+const elStatus = document.getElementById('status');
+const elRifle = document.getElementById('rifle');
+const elHp = document.getElementById('hpbar');
+const elHurt = document.getElementById('hurt');
+
+// ---------- 視界判定（敵がプレイヤーを見つけるか）----------
+function enemySeesPlayer() {
+  const dx = player.x - enemy.x, dz = player.z - enemy.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist > enemy.sightRange) return false;
+  // 敵の向いている方向との角度（前方120°以内）。幽霊は全方位察知。
+  if (enemyKind === 'ghost') return true;
+  const toPlayer = Math.atan2(dx, dz);
+  const diff = Math.abs(((toPlayer - enemy.heading + Math.PI) % (Math.PI * 2)) - Math.PI);
+  return diff < Math.PI * 0.55;
+}
+
+const elScope = document.getElementById('scope');
+const elScopeDot = document.getElementById('scopedot');
+const elCross = document.getElementById('cross');
 
 const clock = new THREE.Clock();
 function update(dt) {
-  const accel = 26, maxSpeed = 34, reverseMax = -12;
-  const fwd = keys['KeyW'] || keys['ArrowUp'];
-  const back = keys['KeyS'] || keys['ArrowDown'];
-  const left = keys['KeyA'] || keys['ArrowLeft'];
-  const right = keys['KeyD'] || keys['ArrowRight'];
+  gameTime += dt;
 
-  if (fwd) carState.speed += accel * dt;
-  else if (back) carState.speed -= accel * dt;
-  else carState.speed *= (1 - 1.5 * dt);       // 惰性減速
-  carState.speed = THREE.MathUtils.clamp(carState.speed, reverseMax, maxSpeed);
-  if (Math.abs(carState.speed) < 0.05) carState.speed = 0;
+  // ===== スコープのズーム（I:拡大 / K:縮小）=====
+  if (mode === 'scope' && !menuOpen) {
+    if (keys['KeyI']) scopeFov = Math.max(6, scopeFov - 40 * dt);
+    if (keys['KeyK']) scopeFov = Math.min(40, scopeFov + 40 * dt);
+  }
+  // 視野角を滑らかに切り替え
+  const targetFov = mode === 'scope' ? scopeFov : NORMAL_FOV;
+  camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 12);
+  camera.updateProjectionMatrix();
+  // 表示の出し分け
+  elScope.style.display = mode === 'scope' ? 'block' : 'none';
+  elScopeDot.style.display = mode === 'scope' ? 'block' : 'none';
+  elCross.style.display = mode === 'scope' ? 'none' : 'block';
 
-  // ステアは速度に応じて効く
-  const steer = (left ? 1 : 0) - (right ? 1 : 0);
-  carState.heading += steer * 1.6 * dt * THREE.MathUtils.clamp(carState.speed / 8, -1, 1);
+  // メニュー表示中はシミュレーションを止める（ポーズ）
+  if (menuOpen) return;
 
-  // 移動
-  const nx = carState.x - Math.sin(carState.heading) * carState.speed * dt;
-  const nz = carState.z - Math.cos(carState.heading) * carState.speed * dt;
-  // 水に入ると重く沈む(減速)
-  const nh = heightAt(nx, nz);
-  if (nh < WATER_LEVEL) carState.speed *= 0.9;
-  // ワールド端で止める
-  const lim = WORLD / 2 - 8;
-  carState.x = THREE.MathUtils.clamp(nx, -lim, lim);
-  carState.z = THREE.MathUtils.clamp(nz, -lim, lim);
+  // ===== プレイヤー移動（操作は従来どおり） =====
+  if (player.alive) {
+    const walk = 7, backSpeed = 4;
+    const fwd = keys['KeyW'] || keys['ArrowUp'];
+    const back = keys['KeyS'] || keys['ArrowDown'];
+    const left = keys['KeyA'] || keys['ArrowLeft'];
+    const right = keys['KeyD'] || keys['ArrowRight'];
+    // 旋回は速度に依らずその場でも可能
+    player.heading += ((left ? 1 : 0) - (right ? 1 : 0)) * 1.8 * dt;
 
-  // 車を地形に追従
-  const gy = heightAt(carState.x, carState.z);
-  const n = terrainNormal(carState.x, carState.z);
-  car.position.set(carState.x, gy, carState.z);
-  // 向き + 地形の傾き
-  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
-  const headingQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), carState.heading);
-  car.quaternion.copy(q).multiply(headingQ);
+    let move = 0;
+    if (fwd) move = walk; else if (back) move = -backSpeed;
+    const nx = player.x - Math.sin(player.heading) * move * dt;
+    const nz = player.z - Math.cos(player.heading) * move * dt;
+    // 深い水には入れない（足止め）
+    if (heightAt(nx, nz) > WATER_LEVEL - 0.3) {
+      const lim = WORLD / 2 - 8;
+      player.x = THREE.MathUtils.clamp(nx, -lim, lim);
+      player.z = THREE.MathUtils.clamp(nz, -lim, lim);
+    }
+  }
 
-  // 主観視点カメラ (運転席)
-  const eye = new THREE.Vector3(0, 1.7, -0.1).applyQuaternion(car.quaternion).add(car.position);
-  const look = new THREE.Vector3(0, 1.4, -10).applyQuaternion(car.quaternion).add(car.position);
-  camera.position.lerp(eye, 0.4);
-  camera.lookAt(look);
+  // 主観視点カメラ（直立・目線の高さ）
+  const gy = heightAt(player.x, player.z);
+  const eyeH = gy + 1.7;
+  camera.position.set(player.x, eyeH, player.z);
+  camera.rotation.set(0, player.heading, 0, 'YXZ');
 
-  // 太陽を車に追従させて影を維持
-  sun.position.set(carState.x + 120, 200, carState.z + 80);
-  sun.target.position.set(carState.x, 0, carState.z);
+  // ===== 敵AI =====
+  if (enemy.alive && player.alive) {
+    // 索敵
+    if (enemySeesPlayer()) alertEnemy();
+    if (enemy.state === 'chase') {
+      enemy.alertTimer -= dt;
+      if (enemy.alertTimer <= 0) enemy.state = 'patrol';
+    }
+
+    let tx, tz, sp;
+    if (enemy.state === 'chase') {
+      tx = player.x; tz = player.z; sp = enemy.speed;
+    } else {
+      // 巡回：目標に着いたら次の地点へ
+      if (Math.hypot(enemy.target.x - enemy.x, enemy.target.z - enemy.z) < 4) {
+        enemy.target.x = enemy.x + (Math.random() - 0.5) * 120;
+        enemy.target.z = enemy.z + (Math.random() - 0.5) * 120;
+      }
+      tx = enemy.target.x; tz = enemy.target.z; sp = enemy.speed * 0.4;
+    }
+    const ex = tx - enemy.x, ez = tz - enemy.z;
+    const ed = Math.hypot(ex, ez) || 1;
+    enemy.heading = Math.atan2(-ex, -ez);
+    const lim = WORLD / 2 - 8;
+    enemy.x = THREE.MathUtils.clamp(enemy.x + (ex / ed) * sp * dt, -lim, lim);
+    enemy.z = THREE.MathUtils.clamp(enemy.z + (ez / ed) * sp * dt, -lim, lim);
+
+    // 接触したらプレイヤーにダメージ
+    const dToPlayer = Math.hypot(player.x - enemy.x, player.z - enemy.z);
+    if (dToPlayer < enemyMesh.userData.radius + 1.2) {
+      player.hp -= 35 * dt;            // 接触中は継続ダメージ
+      elHurt.style.opacity = '1';
+      setTimeout(() => { elHurt.style.opacity = '0'; }, 120);
+      if (player.hp <= 0) { player.hp = 0; player.alive = false; endGame(false); }
+    }
+  }
+
+  // 敵メッシュ配置（幽霊は浮遊）
+  const egy = heightAt(enemy.x, enemy.z);
+  const floatY = enemyMesh.userData.fly ? 2.4 + Math.sin(gameTime * 1.5) * 0.4 : 0;
+  enemyMesh.position.set(enemy.x, egy + floatY, enemy.z);
+  enemyMesh.rotation.y = enemy.heading;
+  enemyMesh.visible = enemy.alive;
+
+  // 太陽をプレイヤー追従で影を維持
+  sun.position.set(player.x + 120, 200, player.z + 80);
+  sun.target.position.set(player.x, 0, player.z);
   sun.target.updateMatrixWorld();
 
-  engine.update(Math.abs(carState.speed), maxSpeed);
+  // スコープ中心に敵が捉えられているか（赤→緑で表示）
+  if (mode === 'scope' && enemy.alive) {
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const onTarget = raycaster.intersectObject(enemyMesh, true).length > 0;
+    elScopeDot.style.background = onTarget ? '#36e04a' : '#e02020';
+  }
 
-  document.getElementById('speed').textContent =
-    Math.round(Math.abs(carState.speed) * 3.6) + ' km/h';
+  // ===== HUD =====
+  const cd = RIFLE_COOLDOWN - (gameTime - lastShot);
+  elRifle.textContent = cd > 0 ? `ライフル: 装填中 ${cd.toFixed(1)}s` : 'ライフル: 装填完了';
+  elRifle.style.color = cd > 0 ? '#ffcf66' : '#9fe0a0';
+  elHp.style.width = player.hp + '%';
+  elHp.style.background = player.hp > 40 ? '#43c44a' : '#e04545';
+  if (!enemy.alive) elStatus.textContent = `敵(${enemyLabel}): 討伐済`, elStatus.style.color = '#7fe08a';
+  else if (enemy.state === 'chase') elStatus.textContent = `敵(${enemyLabel}): 追跡中！`, elStatus.style.color = '#ff6b6b';
+  else elStatus.textContent = `敵(${enemyLabel}): 捜索中`, elStatus.style.color = '#ffffff';
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt);
-  water.position.set(carState.x, WATER_LEVEL + Math.sin(performance.now() * 0.001) * 0.05, carState.z);
+  water.position.set(player.x, WATER_LEVEL + Math.sin(performance.now() * 0.001) * 0.05, player.z);
   renderer.render(scene, camera);
 }
 animate();
