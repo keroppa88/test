@@ -105,7 +105,7 @@
 </div>
 <div id="hurt"></div>
 <div id="over"><h1></h1><p>クリックでリスタート</p></div>
-<div id="hint">クリックで視点固定 ｜ マウス:視点 W/S:前後 A/D:旋回 Shift:走る ｜ P:メニュー ｜ スコープ中:Enter発砲(20秒/発) I/K:ズーム</div>
+<div id="hint">クリックで視点固定 ｜ マウス:視点(上下左右) W/S:前後 A/D:旋回 Shift:走る ｜ P:スコープ覗く/外す ｜ スコープ中:Enter発砲(20秒/発) I/K:ズーム</div>
 
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -305,19 +305,13 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
   sfx.unlock();
   if (overlayActive) return;
-  if (e.code === 'KeyP') {                       // メニューの開閉
-    if (menuOpen) closeMenu(); else openMenu();
-    e.preventDefault(); return;
-  }
-  if (menuOpen) {                                // メニュー操作
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') { menuIndex = (menuIndex + menuItems.length - 1) % menuItems.length; refreshMenu(); }
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { menuIndex = (menuIndex + 1) % menuItems.length; refreshMenu(); }
-    else if (e.code === 'Enter') chooseMenu();
+  if (e.code === 'KeyP') {                       // P でスコープを覗く / 外す
+    mode = (mode === 'scope') ? 'normal' : 'scope';
+    if (mode === 'scope' && document.pointerLockElement !== canvas) canvas.requestPointerLock();
     e.preventDefault(); return;
   }
   if (mode === 'scope') {
-    if (e.code === 'Enter') { fire(); e.preventDefault(); }
-    if (e.code === 'Escape') mode = 'normal';
+    if (e.code === 'Enter') { fire(); e.preventDefault(); }   // Enter で発砲
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
