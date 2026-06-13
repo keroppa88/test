@@ -346,8 +346,8 @@ const sfx = (() => {
   // ファイル名(拡張子なし): 必要に応じて変更してください
   const walk = load('walk', { loop: true, volume: 0.6 });   // 歩く音
   const run = load('run', { loop: true, volume: 0.7 });     // 走る音
-  const rifle = load('rifle', { volume: 0.9 });             // ライフル狙撃音
-  const hit = load('hit', { volume: 0.9 });                 // 命中音
+  const rifle = load('狙撃銃発射', { volume: 0.9 });          // 発射音
+  const hit = load('ショット命中', { volume: 0.9 });          // 命中音
 
   function play(a) { try { a.currentTime = 0; a.play(); } catch (e) {} }
   function unlock() { /* 任意のユーザー操作で再生可能になる */ }
@@ -470,10 +470,10 @@ function fire() {
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
   const hits = raycaster.intersectObject(enemyMesh, true);
   if (hits.length) {
-    enemy.hp -= 60;            // 2発で仕留められる威力
     sfx.hit();                 // 命中音
     flashEnemyHit();
-    if (enemy.hp <= 0) { enemy.hp = 0; enemy.alive = false; endGame(true); }
+    enemy.hp = 0; enemy.alive = false;   // 一発命中で討伐
+    endGame(true);
   }
 }
 addEventListener('mousedown', () => {
