@@ -440,7 +440,7 @@ const enemy = {
   state: 'patrol',           // patrol / chase
   alertTimer: 0,             // 追跡継続時間
   target: { x: 0, z: 0 },    // 巡回先
-  speed: enemyKind === 'giant' ? 4.5 : enemyKind === 'ghost' ? 6.5 : 5.8,
+  speed: 21 * 1.2,           // プレイヤーの走り(21)の1.2倍 = 25.2。逃げ切れない速さ
   sightRange: enemyKind === 'ghost' ? 50 : 70,
   hearRange: 160,
 };
@@ -621,13 +621,12 @@ function update(dt) {
     enemy.x = THREE.MathUtils.clamp(enemy.x + (ex / ed) * sp * dt, -lim, lim);
     enemy.z = THREE.MathUtils.clamp(enemy.z + (ez / ed) * sp * dt, -lim, lim);
 
-    // 接触したらプレイヤーにダメージ
+    // 触れられたら即終了（敵は遠隔攻撃できない＝近接のみ）
     const dToPlayer = Math.hypot(player.x - enemy.x, player.z - enemy.z);
     if (dToPlayer < enemyMesh.userData.radius + 1.2) {
-      player.hp -= 35 * dt;            // 接触中は継続ダメージ
+      player.hp = 0; player.alive = false;
       elHurt.style.opacity = '1';
-      setTimeout(() => { elHurt.style.opacity = '0'; }, 120);
-      if (player.hp <= 0) { player.hp = 0; player.alive = false; endGame(false); }
+      endGame(false);
     }
   }
 
