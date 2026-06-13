@@ -184,23 +184,8 @@ function makeTrees() {
 }
 makeTrees();
 
-// ---------- 車 ----------
+// ---------- 車 (主観視点なので車体は描画せず、座標・向きの基準のみ) ----------
 const car = new THREE.Group();
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0xcc4422, roughness: 0.5, metalness: 0.3 });
-const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), bodyMat);
-body.position.y = 0.9; body.castShadow = true;
-const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.7, 2),
-  new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.3 }));
-cabin.position.set(0, 1.55, -0.2); cabin.castShadow = true;
-car.add(body, cabin);
-const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 12);
-wheelGeo.rotateZ(Math.PI / 2);
-const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-for (const [wx, wz] of [[-1, 1.3], [1, 1.3], [-1, -1.3], [1, -1.3]]) {
-  const w = new THREE.Mesh(wheelGeo, wheelMat);
-  w.position.set(wx, 0.5, wz); w.castShadow = true;
-  car.add(w);
-}
 scene.add(car);
 
 // ---------- 車の物理 ----------
@@ -217,8 +202,74 @@ const carState = {
 })();
 
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; });
+addEventListener('keydown', e => { keys[e.code] = true; engine.start(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---------- エンジン音 (ノイズ合成・2層を重ねる) ----------
+const engine = (() => {
+  let ctx, master, started = false;
+  // 層1: 低い唸り(ローパス) 層2: 高い吹け上がり(バンドパス)
+  let lowGain, highGain, lowFilter, highFilter;
+
+  function makeNoiseSource(c) {
+    // 2秒分のホワイトノイズをループ再生
+    const buf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    return src;
+  }
+
+  function start() {
+    if (started) return;
+    started = true;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = 0.0001;
+    master.connect(ctx.destination);
+
+    // 層1: 低周波の唸り
+    const n1 = makeNoiseSource(ctx);
+    lowFilter = ctx.createBiquadFilter();
+    lowFilter.type = 'lowpass';
+    lowFilter.frequency.value = 120;
+    lowFilter.Q.value = 6;
+    lowGain = ctx.createGain();
+    lowGain.gain.value = 0.6;
+    n1.connect(lowFilter).connect(lowGain).connect(master);
+    n1.start();
+
+    // 層2: 高周波のザラついた吹け上がり
+    const n2 = makeNoiseSource(ctx);
+    highFilter = ctx.createBiquadFilter();
+    highFilter.type = 'bandpass';
+    highFilter.frequency.value = 800;
+    highFilter.Q.value = 1.2;
+    highGain = ctx.createGain();
+    highGain.gain.value = 0.0;
+    n2.connect(highFilter).connect(highGain).connect(master);
+    n2.start();
+  }
+
+  // t: アイドル0〜全開1 を想定した量
+  function update(speedAbs, maxSpeed) {
+    if (!started) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    const t = THREE.MathUtils.clamp(speedAbs / maxSpeed, 0, 1);
+    const now = ctx.currentTime, smooth = 0.08;
+    // 全体音量: アイドルでも僅かに鳴り、速度で大きく
+    master.gain.setTargetAtTime(0.12 + t * 0.55, now, smooth);
+    // 層1の唸りは回転数(速度)でピッチが上がる
+    lowFilter.frequency.setTargetAtTime(90 + t * 380, now, smooth);
+    lowGain.gain.setTargetAtTime(0.5 + t * 0.3, now, smooth);
+    // 層2のザラつき(ノイズ感)は速度が上がるほど増える
+    highFilter.frequency.setTargetAtTime(500 + t * 2600, now, smooth);
+    highGain.gain.setTargetAtTime(t * t * 0.9, now, smooth);
+  }
+
+  return { start, update };
+})();
 
 function terrainNormal(x, z) {
   const e = 1.0;
@@ -275,6 +326,8 @@ function update(dt) {
   sun.position.set(carState.x + 120, 200, carState.z + 80);
   sun.target.position.set(carState.x, 0, carState.z);
   sun.target.updateMatrixWorld();
+
+  engine.update(Math.abs(carState.speed), maxSpeed);
 
   document.getElementById('speed').textContent =
     Math.round(Math.abs(carState.speed) * 3.6) + ' km/h';
