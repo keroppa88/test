@@ -105,7 +105,7 @@
 </div>
 <div id="hurt"></div>
 <div id="over"><h1></h1><p>クリックでリスタート</p></div>
-<div id="hint">W/↑:前進 S/↓:後退 A/←・D/→:旋回 ｜ P:メニュー ｜ スコープ中:Enter発砲(20秒/発) I/K:ズーム</div>
+<div id="hint">クリックで視点固定 ｜ マウス:視点 W/S:前後 A/D:旋回 Shift:走る ｜ P:メニュー ｜ スコープ中:Enter発砲(20秒/発) I/K:ズーム</div>
 
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -267,7 +267,7 @@ makeTrees();
 
 // ---------- プレイヤー (徒歩・主観視点。座標と向きのみ管理) ----------
 const player = {
-  x: 0, z: 0, heading: 0, speed: 0, hp: 100, alive: true,
+  x: 0, z: 0, heading: 0, pitch: 0, speed: 0, hp: 100, alive: true,
 };
 (function placePlayer() {
   for (let i = 0; i < 300; i++) {
@@ -290,7 +290,7 @@ let menuIndex = 0;
 function refreshMenu() {
   menuItems.forEach((el, i) => el.classList.toggle('selected', i === menuIndex));
 }
-function openMenu() { menuOpen = true; menuIndex = 0; refreshMenu(); menuEl.style.display = 'flex'; }
+function openMenu() { menuOpen = true; menuIndex = 0; refreshMenu(); menuEl.style.display = 'flex'; document.exitPointerLock(); }
 function closeMenu() { menuOpen = false; menuEl.style.display = 'none'; }
 function chooseMenu() {
   const action = menuItems[menuIndex].dataset.action;
@@ -322,33 +322,53 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 
-// ---------- 効果音 (ノイズ合成・銃声) ----------
+// ---------- マウスで視点移動（ポインターロック）----------
+const canvas = renderer.domElement;
+canvas.addEventListener('click', () => {
+  if (!overlayActive && !menuOpen && document.pointerLockElement !== canvas) canvas.requestPointerLock();
+});
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== canvas) return;
+  // スコープ時は感度を下げて精密に狙えるように
+  const sens = (mode === 'scope' ? 0.0007 : 0.0022);
+  player.heading -= e.movementX * sens;
+  player.pitch -= e.movementY * sens;
+  player.pitch = THREE.MathUtils.clamp(player.pitch, -Math.PI / 2 + 0.05, Math.PI / 2 - 0.05);
+});
+
+// ---------- 効果音 (sound/ フォルダの音声ファイルを使用) ----------
+// 拡張子は自動判別 (mp3 / wav / ogg / m4a の順に試行)
 const sfx = (() => {
-  let ctx;
-  function unlock() {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume();
+  function load(name, { loop = false, volume = 1 } = {}) {
+    const exts = ['mp3', 'wav', 'ogg', 'm4a'];
+    const a = new Audio();
+    a.loop = loop; a.volume = volume; a.preload = 'auto';
+    let i = 0;
+    const tryNext = () => { if (i < exts.length) a.src = `sound/${name}.${exts[i++]}`; };
+    a.addEventListener('error', tryNext);
+    tryNext();
+    return a;
   }
-  // ライフルの発砲音: 鋭いノイズのバースト + 低い衝撃音
-  function gunshot() {
-    if (!ctx) return;
-    const t = ctx.currentTime;
-    // ノイズバースト
-    const len = ctx.sampleRate * 0.4;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 600;
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    src.connect(hp).connect(g).connect(ctx.destination); src.start(t);
-    // 低い衝撃音
-    const osc = ctx.createOscillator(); osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, t); osc.frequency.exponentialRampToValueAtTime(40, t + 0.25);
-    const og = ctx.createGain(); og.gain.setValueAtTime(0.8, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    osc.connect(og).connect(ctx.destination); osc.start(t); osc.stop(t + 0.3);
-  }
-  return { unlock, gunshot };
+  // ファイル名(拡張子なし): 必要に応じて変更してください
+  const walk = load('walk', { loop: true, volume: 0.6 });   // 歩く音
+  const run = load('run', { loop: true, volume: 0.7 });     // 走る音
+  const rifle = load('rifle', { volume: 0.9 });             // ライフル狙撃音
+  const hit = load('hit', { volume: 0.9 });                 // 命中音
+
+  function play(a) { try { a.currentTime = 0; a.play(); } catch (e) {} }
+  function unlock() { /* 任意のユーザー操作で再生可能になる */ }
+
+  return {
+    unlock,
+    gunshot: () => play(rifle),
+    hit: () => play(hit),
+    // 移動音: 'walk' / 'run' / null を渡して切り替え
+    foot(kind) {
+      if (kind === 'walk') { if (run.paused === false) run.pause(); if (walk.paused) walk.play().catch(() => {}); }
+      else if (kind === 'run') { if (walk.paused === false) walk.pause(); if (run.paused) run.play().catch(() => {}); }
+      else { if (!walk.paused) walk.pause(); if (!run.paused) run.pause(); }
+    },
+  };
 })();
 
 // ---------- 敵 (ランダムで3種から1体) ----------
@@ -420,7 +440,7 @@ const enemy = {
   state: 'patrol',           // patrol / chase
   alertTimer: 0,             // 追跡継続時間
   target: { x: 0, z: 0 },    // 巡回先
-  speed: enemyKind === 'giant' ? 4.5 : enemyKind === 'ghost' ? 6.5 : 5.8,
+  speed: 21 * 1.2,           // プレイヤーの走り(21)の1.2倍 = 25.2。逃げ切れない速さ
   sightRange: enemyKind === 'ghost' ? 50 : 70,
   hearRange: 160,
 };
@@ -457,6 +477,7 @@ function fire() {
   const hits = raycaster.intersectObject(enemyMesh, true);
   if (hits.length) {
     enemy.hp -= 60;            // 2発で仕留められる威力
+    sfx.hit();                 // 命中音
     flashEnemyHit();
     if (enemy.hp <= 0) { enemy.hp = 0; enemy.alive = false; endGame(true); }
   }
@@ -464,6 +485,8 @@ function fire() {
 addEventListener('mousedown', () => {
   if (overlayActive) { restart(); return; }
   if (menuOpen) return;
+  // ポインター未ロック時のクリックは視点固定のためだけに使う（誤射防止）
+  if (document.pointerLockElement !== canvas) return;
   if (mode === 'scope') fire();                  // スコープ中はクリックでも発砲可
 });
 
@@ -488,6 +511,8 @@ function endGame(win) {
   over.querySelector('h1').textContent = win ? '討伐成功' : 'やられた…';
   over.querySelector('h1').style.color = win ? '#7fe08a' : '#ff6b6b';
   over.style.display = 'flex';
+  document.exitPointerLock();
+  sfx.foot(null);
 }
 function restart() { location.reload(); }
 
@@ -534,18 +559,23 @@ function update(dt) {
   // メニュー表示中はシミュレーションを止める（ポーズ）
   if (menuOpen) return;
 
-  // ===== プレイヤー移動（操作は従来どおり） =====
+  // ===== プレイヤー移動 =====
+  // 速度: 歩き=旧7×1.4=9.8、走り=旧7×3=21（Shiftで走る）
+  const WALK = 9.8, RUN = 21, BACK = 9.8 * 0.6;
+  let moving = false, running = false;
   if (player.alive) {
-    const walk = 7, backSpeed = 4;
     const fwd = keys['KeyW'] || keys['ArrowUp'];
     const back = keys['KeyS'] || keys['ArrowDown'];
     const left = keys['KeyA'] || keys['ArrowLeft'];
     const right = keys['KeyD'] || keys['ArrowRight'];
-    // 旋回は速度に依らずその場でも可能
+    running = keys['ShiftLeft'] || keys['ShiftRight'];
+    // A/D でも旋回可（マウスと併用）
     player.heading += ((left ? 1 : 0) - (right ? 1 : 0)) * 1.8 * dt;
 
     let move = 0;
-    if (fwd) move = walk; else if (back) move = -backSpeed;
+    if (fwd) move = running ? RUN : WALK;
+    else if (back) move = -BACK;
+    if (move !== 0) moving = true;
     const nx = player.x - Math.sin(player.heading) * move * dt;
     const nz = player.z - Math.cos(player.heading) * move * dt;
     // 深い水には入れない（足止め）
@@ -555,12 +585,14 @@ function update(dt) {
       player.z = THREE.MathUtils.clamp(nz, -lim, lim);
     }
   }
+  // 足音（移動中のみ。走り/歩きで切り替え）
+  sfx.foot(!player.alive || !moving ? null : (running ? 'run' : 'walk'));
 
-  // 主観視点カメラ（直立・目線の高さ）
+  // 主観視点カメラ（直立・目線の高さ、マウスで上下左右）
   const gy = heightAt(player.x, player.z);
   const eyeH = gy + 1.7;
   camera.position.set(player.x, eyeH, player.z);
-  camera.rotation.set(0, player.heading, 0, 'YXZ');
+  camera.rotation.set(player.pitch, player.heading, 0, 'YXZ');
 
   // ===== 敵AI =====
   if (enemy.alive && player.alive) {
@@ -589,13 +621,12 @@ function update(dt) {
     enemy.x = THREE.MathUtils.clamp(enemy.x + (ex / ed) * sp * dt, -lim, lim);
     enemy.z = THREE.MathUtils.clamp(enemy.z + (ez / ed) * sp * dt, -lim, lim);
 
-    // 接触したらプレイヤーにダメージ
+    // 触れられたら即終了（敵は遠隔攻撃できない＝近接のみ）
     const dToPlayer = Math.hypot(player.x - enemy.x, player.z - enemy.z);
     if (dToPlayer < enemyMesh.userData.radius + 1.2) {
-      player.hp -= 35 * dt;            // 接触中は継続ダメージ
+      player.hp = 0; player.alive = false;
       elHurt.style.opacity = '1';
-      setTimeout(() => { elHurt.style.opacity = '0'; }, 120);
-      if (player.hp <= 0) { player.hp = 0; player.alive = false; endGame(false); }
+      endGame(false);
     }
   }
 
